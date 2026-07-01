@@ -1,0 +1,5 @@
+.DS_Store
+.db
+.idea
+*.iml
+node_modules/
