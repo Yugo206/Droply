@@ -2,8 +2,19 @@ const express = require("express");
 const Database = require("better-sqlite3");
 const db = new Database("database.db");
 const { nanoid } = require("nanoid");
+const multer = require("multer");
+const path = require("path");
 
-const id = nanoid(8);
+const storage = multer.diskStorage({
+    destination: "uploads/",
+    filename: (req, file, cb) => {
+        const storedName = `${nanoid(16)}${path.extname(file.originalname)}`;
+        cb(null, storedName);
+    }
+});
+
+const upload = multer({ storage });
+
 db.prepare(`
 CREATE TABLE IF NOT EXISTS files (
     id TEXT PRIMARY KEY,
@@ -25,9 +36,40 @@ app.get("/", (req, res) => {
 });
 
 // front-end API
+app.get("/f/:id", (req, res) => {
+    const file = db.prepare("SELECT * FROM files WHERE id = ?").get(req.params.id);
+    if (!file) {
+        return res.status(404).json({ error: "File not found." });
+    }
+    req.sendFile(path.join(__dirname, "uploads", file.stored_name));
+});
 
-app.post("/api/upload", (req, res) => {
-    // handle file upload
+app.post("/api/upload", upload.single("file"), (req, res) => {
+    if (!req.file) {
+        return res.status(400).json({ error: "No file uploaded." });
+    }
+
+    const id = nanoid(8);
+    const createdAt = Date.now();
+    const expiresAt = createdAt + (24 * 60 * 60 * 1000);
+
+    db.prepare(`
+        INSERT INTO files (id, filename, stored_name, size, created_at, expires_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+    `).run(
+        id,
+        req.file.originalname,
+        req.file.filename,
+        req.file.size,
+        createdAt,
+        expiresAt
+    );
+
+    res.json({
+        success: true,
+        url: `/f/${id}`,
+        expiresAt
+    });
 });
 
 app.listen(3000, () => {
