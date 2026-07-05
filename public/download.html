@@ -61,10 +61,21 @@
     </div>
 
     <script>
+        const id = window.location.href.split('/').pop();
+
+        fetch(`/api/file-info/${id}`)
+            .then(res => res.json())
+            .then(data => {
+                document.getElementById('filename').textContent = data.filename;
+
+                const sizeMB = (data.size / 1024 / 1024).toFixed(2);
+                document.getElementById('filesize').textContent = `${sizeMB} MB`;
+
+                document.getElementById('expires').textContent =
+                    new Date(data.expiresAt).toLocaleString();});
+
         document.getElementById('downloadBtn').addEventListener('click', () => {
-            // TODO: replace with the real download endpoint.
-            window.location.href = '/download/FILE_ID';
-        });
+            window.location.href = `/api/files/${id}`;});
     </script>
 </body>
 </html>
