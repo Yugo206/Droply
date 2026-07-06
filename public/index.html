@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Drova</title>
+
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: linear-gradient(135deg, #0f172a, #1e293b);
+      color: white;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+
+    .container {
+      width: 90%;
+      max-width: 500px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 16px;
+      padding: 24px;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 10px 40px rgba(0,0,0,0.4);
+      text-align: center;
+    }
+
+    h1 {
+      margin-bottom: 10px;
+      font-size: 24px;
+    }
+
+    .dropzone {
+      border: 2px dashed rgba(255,255,255,0.3);
+      border-radius: 12px;
+      padding: 40px 20px;
+      margin-top: 20px;
+      cursor: pointer;
+      transition: 0.2s;
+    }
+
+    .dropzone:hover {
+      border-color: #38bdf8;
+      background: rgba(56,189,248,0.1);
+    }
+
+    .dropzone.dragover {
+      border-color: #22c55e;
+      background: rgba(34,197,94,0.15);
+    }
+
+    input[type="file"] {
+      display: none;
+    }
+
+    .file-info {
+      margin-top: 15px;
+      font-size: 14px;
+      opacity: 0.8;
+    }
+
+    button {
+      margin-top: 20px;
+      width: 100%;
+      padding: 12px;
+      border: none;
+      border-radius: 10px;
+      background: #38bdf8;
+      color: black;
+      font-weight: bold;
+      cursor: pointer;
+      transition: 0.2s;
+    }
+
+    button:hover {
+      background: #0ea5e9;
+    }
+
+    button:disabled {
+      background: #334155;
+      color: #94a3b8;
+      cursor: not-allowed;
+    }
+
+    .url-box {
+      margin-top: 15px;
+      word-break: break-all;
+      font-size: 13px;
+      opacity: 0.9;
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="container">
+    <h1>Droply</h1>
+    <p>Drop a file or select one</p>
+
+    <div class="dropzone" id="dropzone">
+      <p>Drag & Drop your file here</p>
+      <p>or click to browse</p>
+      <input type="file" id="fileInput"/>
+    </div>
+
+    <div class="file-info" id="fileInfo">No file selected</div>
+
+    <button id="uploadBtn" disabled>Create URL</button>
+
+    <div class="url-box" id="urlBox"></div>
+  </div>
+
+  <script>
+    const dropzone = document.getElementById("dropzone");
+    const fileInput = document.getElementById("fileInput");
+    const fileInfo = document.getElementById("fileInfo");
+    const uploadBtn = document.getElementById("uploadBtn");
+    const urlBox = document.getElementById("urlBox");
+
+    let selectedFile = null;
+
+    dropzone.addEventListener("click", () => fileInput.click());
+
+    fileInput.addEventListener("change", (e) => {
+      handleFile(e.target.files[0]);
+    });
+
+    dropzone.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      dropzone.classList.add("dragover");
+    });
+
+    dropzone.addEventListener("dragleave", () => {
+      dropzone.classList.remove("dragover");
+    });
+
+    dropzone.addEventListener("drop", (e) => {
+      e.preventDefault();
+      dropzone.classList.remove("dragover");
+      handleFile(e.dataTransfer.files[0]);
+    });
+
+    function handleFile(file) {
+      if (!file) return;
+
+      selectedFile = file;
+      fileInfo.textContent = `${file.name} (${Math.round(file.size / 1024)} KB)`;
+      uploadBtn.disabled = false;
+    }
+
+    uploadBtn.addEventListener("click", async () => {
+      if (!selectedFile) return;
+
+      uploadBtn.textContent = "Creating URL...";
+
+      const formData = new FormData();
+      formData.append("file", selectedFile);
+
+      try {
+        const res = await fetch("/upload", {
+          method: "POST",
+          body: formData
+        });
+
+        const data = await res.json();
+
+        urlBox.innerHTML = `
+          <p>✅ Your link:</p>
+          <a href="${data.url}" target="_blank">${data.url}</a>
+        `;
+      } catch (err) {
+        urlBox.textContent = "Error uploading file.";
+      }
+
+      uploadBtn.textContent = "Create URL";
+    });
+  </script>
+
+</body>
+</html>

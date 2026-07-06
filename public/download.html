@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Download | Drova</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: Arial, Helvetica, sans-serif;
+            background: #f5f7fb;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .card {
+            width: 90%;
+            max-width: 500px;
+            background: white;
+            padding: 2rem;
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0,0,0,.1);
+            text-align: center;
+        }
+        h1 { margin-top: 0; }
+        .info {
+            margin: 1.5rem 0;
+            text-align: left;
+            line-height: 1.8;
+        }
+        .label { color: #666; }
+        button {
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: 10px;
+            background: #2563eb;
+            color: white;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #1d4ed8;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>Droply</h1>
+        <p>Ready to download your file.</p>
+
+        <div class="info">
+            <div><span class="label">Name:</span> <strong id="filename">example.zip</strong></div>
+            <div><span class="label">Size:</span> <span id="filesize">12.4 MB</span></div>
+            <div><span class="label">Expires:</span> <span id="expires">24 hours</span></div>
+        </div>
+
+        <button id="downloadBtn">⬇ Download</button>
+    </div>
+
+    <script>
+        const id = window.location.href.split('/').pop();
+
+        fetch(`/api/file-info/${id}`)
+            .then(res => res.json())
+            .then(data => {
+                document.getElementById('filename').textContent = data.filename;
+
+                const sizeMB = (data.size / 1024 / 1024).toFixed(2);
+                document.getElementById('filesize').textContent = `${sizeMB} MB`;
+
+                document.getElementById('expires').textContent =
+                    new Date(data.expiresAt).toLocaleString();});
+
+        document.getElementById('downloadBtn').addEventListener('click', () => {
+            window.location.href = `/api/files/${id}`;});
+    </script>
+</body>
+</html>
