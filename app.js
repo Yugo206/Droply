@@ -10,6 +10,8 @@ if (!fs.existsSync("uploads")) {
     fs.mkdirSync("uploads");
 }
 
+const MAX_FILE_SIZE = 5 * 1024 * 1024 * 1024; // 5 GB
+
 const storage = multer.diskStorage({
     destination: "uploads/",
     filename: (req, file, cb) => {
@@ -18,7 +20,10 @@ const storage = multer.diskStorage({
     }
 });
 
-const upload = multer({ storage });
+const upload = multer({
+     storage,
+     limits: { fileSize: MAX_FILE_SIZE }
+});
 
 db.prepare(`
 CREATE TABLE IF NOT EXISTS files (
@@ -82,6 +87,7 @@ app.get("/api/files/:id", (req, res) => {
 });
 
 app.post("/api/upload", upload.single("file"), (req, res) => {
+    console.log("Received file:", req.file);
     if (!req.file) {
         return res.status(400).json({ error: "No file uploaded." });
     }
@@ -102,11 +108,23 @@ app.post("/api/upload", upload.single("file"), (req, res) => {
         expiresAt
     );
 
+    const url = `${req.protocol}://${req.get("host")}/f/${id}`;
+
     res.json({
         success: true,
-        url: `/f/${id}`,
+        url,
         expiresAt
     });
+});
+
+app.use((err, req, res, next) => {
+    if (err instanceof multer.MulterError && err.code === "LIMIT_FILE_SIZE") {
+        return res.status(413).json({
+            error: "File is too large."
+        });
+    }
+
+    next(err);
 });
 
 app.listen(3000, () => {
