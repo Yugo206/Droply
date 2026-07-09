@@ -161,7 +161,7 @@
       formData.append("file", selectedFile);
 
       try {
-        const res = await fetch("/upload", {
+        const res = await fetch("/api/upload", {
           method: "POST",
           body: formData
         });
@@ -178,6 +178,22 @@
 
       uploadBtn.textContent = "Create URL";
     });
+
+    const MAX_SIZE = 5 * 1024 * 1024 * 1024;
+
+    function handleFile(file) {
+      if (!file) return;
+
+      if (file.size > MAX_SIZE) {
+          fileInfo.textContent = "File exceeds the 5 GB limit.";
+          uploadBtn.disabled = true;
+          return;
+      }
+
+      selectedFile = file;
+      fileInfo.textContent = `${file.name} (${Math.round(file.size / 1024)} KB)`;
+      uploadBtn.disabled = false;
+    }
   </script>
 
 </body>
