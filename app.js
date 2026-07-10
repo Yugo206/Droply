@@ -86,9 +86,9 @@ app.get("/api/files/:id", (req, res) => {
 });
 });
 
-app.post("/api/upload", upload.single("file"), (req, res) => {
-    console.log("Received file:", req.file);
-    if (!req.file) {
+app.post("/api/upload", upload.array("file"), (req, res) => {
+    console.log("Received file:", req.files);
+    if (!req.files || req.files.length === 0) {
         return res.status(400).json({ error: "No file uploaded." });
     }
 
@@ -101,9 +101,9 @@ app.post("/api/upload", upload.single("file"), (req, res) => {
         VALUES (?, ?, ?, ?, ?, ?)
     `).run(
         id,
-        req.file.originalname,
-        req.file.filename,
-        req.file.size,
+        req.files[0].originalname,
+        req.files[0].filename,
+        req.files[0].size,
         createdAt,
         expiresAt
     );
