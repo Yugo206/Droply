@@ -5,6 +5,7 @@ const { nanoid } = require("nanoid");
 const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
+const rateLimit = require("express-rate-limit");
 
 if (!fs.existsSync("uploads")) {
     fs.mkdirSync("uploads");
@@ -39,6 +40,14 @@ CREATE TABLE IF NOT EXISTS files (
 const app = express();
 
 app.use(express.static("public"));
+
+const uploadLimiter = rateLimit({
+    windowMs: 60 * 60 * 1000,
+    max: 10,
+    message: {
+        error: "Too many uploads. Try again later."
+    }
+});
 
 // return page
 app.get("/", (req, res) => {
@@ -86,7 +95,7 @@ app.get("/api/files/:id", (req, res) => {
 });
 });
 
-app.post("/api/upload", upload.single("file"), (req, res) => {
+app.post("/api/upload", uploadLimiter, upload.single("file"), (req, res) => {
     console.log("Received file:", req.file);
     if (!req.file) {
         return res.status(400).json({ error: "No file uploaded." });
