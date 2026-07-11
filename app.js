@@ -5,6 +5,7 @@ const { nanoid } = require("nanoid");
 const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
+const rateLimit = require("express-rate-limit");
 const { ZipArchive } = require("archiver");
 
 if (!fs.existsSync("uploads")) {
@@ -60,6 +61,14 @@ const app = express();
 
 app.use(express.static("public"));
 
+const uploadLimiter = rateLimit({
+    windowMs: 60 * 60 * 1000,
+    max: 10,
+    message: {
+        error: "Too many uploads. Try again later."
+    }
+});
+
 // return page
 app.get("/", (req, res) => {
     res.sendFile(__dirname + "/public/index.html");
@@ -106,8 +115,9 @@ app.get("/api/files/:id", (req, res) => {
 });
 });
 
-app.post("/api/upload", upload.array("files"), async (req, res) => {
-    if (!req.files || req.files.length === 0) {
+app.post("/api/upload", uploadLimiter, upload.single("file"), (req, res) => {
+    console.log("Received file:", req.file);
+    if (!req.file) {
         return res.status(400).json({ error: "No file uploaded." });
     }
 
