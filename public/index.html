@@ -104,7 +104,7 @@
     <div class="dropzone" id="dropzone">
       <p>Drag & Drop your file here</p>
       <p>or click to browse</p>
-      <input type="file" id="fileInput"/>
+      <input type="file" id="fileInput" multiple/>
     </div>
 
     <div class="file-info" id="fileInfo">No file selected</div>
@@ -121,12 +121,12 @@
     const uploadBtn = document.getElementById("uploadBtn");
     const urlBox = document.getElementById("urlBox");
 
-    let selectedFile = null;
+    let selectedFiles = [];
 
     dropzone.addEventListener("click", () => fileInput.click());
 
     fileInput.addEventListener("change", (e) => {
-      handleFile(e.target.files[0]);
+      handleFiles(e.target.files);
     });
 
     dropzone.addEventListener("dragover", (e) => {
@@ -141,24 +141,19 @@
     dropzone.addEventListener("drop", (e) => {
       e.preventDefault();
       dropzone.classList.remove("dragover");
-      handleFile(e.dataTransfer.files[0]);
+      handleFiles(e.dataTransfer.files);
     });
 
-    function handleFile(file) {
-      if (!file) return;
-
-      selectedFile = file;
-      fileInfo.textContent = `${file.name} (${Math.round(file.size / 1024)} KB)`;
-      uploadBtn.disabled = false;
-    }
 
     uploadBtn.addEventListener("click", async () => {
-      if (!selectedFile) return;
+      if (selectedFiles.length === 0) return;
 
       uploadBtn.textContent = "Creating URL...";
 
       const formData = new FormData();
-      formData.append("file", selectedFile);
+      for (const file of selectedFiles) {
+        formData.append("files", file);
+      }
 
       try {
         const res = await fetch("/api/upload", {
@@ -181,17 +176,29 @@
 
     const MAX_SIZE = 5 * 1024 * 1024 * 1024;
 
-    function handleFile(file) {
-      if (!file) return;
+    function handleFiles(files) {
+      if (!files || files.length === 0) return;
 
-      if (file.size > MAX_SIZE) {
-          fileInfo.textContent = "File exceeds the 5 GB limit.";
-          uploadBtn.disabled = true;
-          return;
+      const fileArray = Array.from(files);
+      const totalSize = fileArray.reduce((sum, file) => sum + file.size, 0);
+
+      if (totalSize > MAX_SIZE) {
+        fileInfo.textContent = "Selected files exceed the 5 GB limit.";
+        uploadBtn.disabled = true;
+        selectedFiles = [];
+        return;
       }
 
-      selectedFile = file;
-      fileInfo.textContent = `${file.name} (${Math.round(file.size / 1024)} KB)`;
+      selectedFiles = fileArray;
+
+      const totalMB = (totalSize / 1024 / 1024).toFixed(2);
+
+      fileInfo.innerHTML = `
+        <strong>${selectedFiles.length}</strong> file(s) selected<br>
+        ${selectedFiles.map(file => file.name).join("<br>")}<br><br>
+        Total size: ${totalMB} MB
+      `;
+
       uploadBtn.disabled = false;
     }
   </script>
