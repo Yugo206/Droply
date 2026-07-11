@@ -6,9 +6,28 @@ const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
 const rateLimit = require("express-rate-limit");
+const { ZipArchive } = require("archiver");
 
 if (!fs.existsSync("uploads")) {
     fs.mkdirSync("uploads");
+}
+
+async function createZip(files, zipPath) {
+    return new Promise((resolve, reject) => {
+        const output = fs.createWriteStream(zipPath);
+        const archive = new ZipArchive({ zlib: { level: 9 } });
+
+        output.on("close", () => resolve());
+        archive.on("error", (err) => reject(err));
+
+        archive.pipe(output);
+
+        for (const file of files) {
+            archive.file(file.path, { name: file.originalname });
+        }
+
+        archive.finalize();
+    });
 }
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024 * 1024; // 5 GB
@@ -33,7 +52,8 @@ CREATE TABLE IF NOT EXISTS files (
     stored_name TEXT NOT NULL,
     size INTEGER,
     created_at INTEGER,
-    expires_at INTEGER
+    expires_at INTEGER,
+    isZip INTEGER
 )
 `).run();
 
@@ -101,20 +121,45 @@ app.post("/api/upload", uploadLimiter, upload.single("file"), (req, res) => {
         return res.status(400).json({ error: "No file uploaded." });
     }
 
+    let isZip = 0;
+    let filename;
+    let storedName;
+    let size;
     const id = nanoid(8);
     const createdAt = Date.now();
     const expiresAt = createdAt + (24 * 60 * 60 * 1000);
 
+    if (req.files.length === 1) {
+    filename = req.files[0].originalname;
+    storedName = req.files[0].filename;
+    size = req.files[0].size;
+    } else {
+    isZip = 1;
+
+    const zipPath = path.join("uploads", `${nanoid(16)}.zip`);
+
+    await createZip(req.files, zipPath);
+
+    filename = "archive.zip";
+    storedName = path.basename(zipPath);
+    size = fs.statSync(zipPath).size;
+
+    for (const file of req.files) {
+        fs.unlinkSync(file.path);
+    }
+    }
+
     db.prepare(`
-        INSERT INTO files (id, filename, stored_name, size, created_at, expires_at)
-        VALUES (?, ?, ?, ?, ?, ?)
+        INSERT INTO files (id, filename, stored_name, size, created_at, expires_at, isZip)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
     `).run(
         id,
-        req.file.originalname,
-        req.file.filename,
-        req.file.size,
+        filename,
+        storedName,
+        size,
         createdAt,
-        expiresAt
+        expiresAt,
+        isZip
     );
 
     const url = `${req.protocol}://${req.get("host")}/f/${id}`;
