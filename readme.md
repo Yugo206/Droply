@@ -9,6 +9,7 @@ Upload a file, get a short URL, and download it from any device. No account requ
 ##  Features
 
 -  Fast file uploads
+-  Drag & drop upload with progress bar
 -  Short and easy-to-share URLs
 -  Temporary download links
 -  Automatic file deletion after expiration
@@ -22,8 +23,6 @@ Upload a file, get a short URL, and download it from any device. No account requ
 - Password-protected links
 - Download limits
 - QR code generation
-- Drag & Drop upload
-- Upload progress bar
 - File previews
 - API for developers
 - Dark mode

@@ -1,81 +1,186 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Download | Drova</title>
-    <style>
-        * { box-sizing: border-box; }
-        body {
-            margin: 0;
-            font-family: Arial, Helvetica, sans-serif;
-            background: #f5f7fb;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-        }
-        .card {
-            width: 90%;
-            max-width: 500px;
-            background: white;
-            padding: 2rem;
-            border-radius: 16px;
-            box-shadow: 0 10px 30px rgba(0,0,0,.1);
-            text-align: center;
-        }
-        h1 { margin-top: 0; }
-        .info {
-            margin: 1.5rem 0;
-            text-align: left;
-            line-height: 1.8;
-        }
-        .label { color: #666; }
-        button {
-            width: 100%;
-            padding: 14px;
-            border: none;
-            border-radius: 10px;
-            background: #2563eb;
-            color: white;
-            font-size: 16px;
-            cursor: pointer;
-        }
-        button:hover {
-            background: #1d4ed8;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Download file | Droply</title>
+  <meta name="description" content="Download a file shared via Droply — fast, simple, no account required.">
+  <meta name="theme-color" content="#0a0e1a">
+
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Droply">
+  <meta property="og:description" content="Download a file shared via Droply.">
+
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="apple-touch-icon" href="/favicon.svg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
-    <div class="card">
-        <h1>Droply</h1>
-        <p>Ready to download your file.</p>
 
-        <div class="info">
-            <div><span class="label">Name:</span> <strong id="filename">example.zip</strong></div>
-            <div><span class="label">Size:</span> <span id="filesize">12.4 MB</span></div>
-            <div><span class="label">Expires:</span> <span id="expires">24 hours</span></div>
+  <div class="bg-blobs"><span></span></div>
+
+  <div class="page">
+    <div class="shell">
+      <a class="brand" href="/">
+        <img class="brand__mark" src="/img/logo-mark.svg" alt="" width="32" height="32">
+        <span class="brand__name">Droply</span>
+      </a>
+
+      <div class="card">
+        <!-- Loading state -->
+        <div id="stateLoading">
+          <h1 class="card__title">Preparing your download</h1>
+          <p class="card__subtitle">Fetching file details&hellip;</p>
+          <div class="skeleton">
+            <div class="skeleton__line"></div>
+            <div class="skeleton__line"></div>
+            <div class="skeleton__line skeleton__line--short"></div>
+          </div>
+          <button class="btn btn--primary" disabled>Download</button>
         </div>
 
-        <button id="downloadBtn">⬇ Download</button>
+        <!-- Ready state -->
+        <div id="stateReady" class="hidden">
+          <h1 class="card__title">Ready to download</h1>
+          <p class="card__subtitle">Your file is ready. Grab it before the link expires.</p>
+
+          <div class="info-list">
+            <div class="info-list__row">
+              <span class="info-list__label">File</span>
+              <span class="info-list__value info-list__value--file">
+                <span id="fileIcon" aria-hidden="true"></span>
+                <span id="filename"></span>
+              </span>
+            </div>
+            <div class="info-list__row">
+              <span class="info-list__label">Size</span>
+              <span class="info-list__value" id="filesize"></span>
+            </div>
+            <div class="info-list__row">
+              <span class="info-list__label">Expires</span>
+              <span class="info-list__value" id="expires" title=""></span>
+            </div>
+          </div>
+
+          <button id="downloadBtn" class="btn btn--primary">Download</button>
+        </div>
+
+        <!-- Error state -->
+        <div id="stateError" class="hidden">
+          <div class="alert alert--error">
+            <span class="alert__icon" aria-hidden="true">&#9888;&#65039;</span>
+            <div>
+              <p class="alert__title" id="errorTitle">Something went wrong</p>
+              <p class="alert__text" id="errorText">We couldn't load this file's details. Please try again.</p>
+            </div>
+          </div>
+          <a href="/" class="btn btn--secondary mt-4">&larr; Back to Droply</a>
+        </div>
+      </div>
+
+      <p class="footer-note">Files are stored securely and deleted automatically after 24 hours.</p>
     </div>
+  </div>
 
-    <script>
-        const id = window.location.href.split('/').pop();
+  <script>
+    function formatBytes(bytes) {
+      if (!bytes && bytes !== 0) return "";
+      if (bytes === 0) return "0 B";
+      const units = ["B", "KB", "MB", "GB"];
+      const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+      const value = bytes / Math.pow(1024, i);
+      return `${value.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
+    }
 
-        fetch(`/api/file-info/${id}`)
-            .then(res => res.json())
-            .then(data => {
-                document.getElementById('filename').textContent = data.filename;
+    function formatExpiry(expiresAtMs) {
+      const diff = expiresAtMs - Date.now();
+      if (diff <= 0) return "Expired";
+      const hours = Math.floor(diff / 3600000);
+      const minutes = Math.floor((diff % 3600000) / 60000);
+      if (hours > 0) return `In ${hours}h ${minutes}m`;
+      return `In ${minutes}m`;
+    }
 
-                const sizeMB = (data.size / 1024 / 1024).toFixed(2);
-                document.getElementById('filesize').textContent = `${sizeMB} MB`;
+    function getFileIcon(filename) {
+      const ext = (filename.split(".").pop() || "").toLowerCase();
+      if (["png", "jpg", "jpeg", "gif", "svg", "webp"].includes(ext)) return "\u{1F5BC}️";
+      if (["mp4", "mov", "avi", "mkv", "webm"].includes(ext)) return "\u{1F3AC}";
+      if (["mp3", "wav", "flac", "ogg"].includes(ext)) return "\u{1F3B5}";
+      if (["zip", "rar", "7z", "tar", "gz"].includes(ext)) return "\u{1F5DC}️";
+      if (ext === "pdf") return "\u{1F4D5}";
+      if (["doc", "docx", "txt", "md"].includes(ext)) return "\u{1F4C4}";
+      if (["js", "ts", "py", "html", "css", "json", "java", "c", "cpp"].includes(ext)) return "\u{1F9E9}";
+      return "\u{1F4E6}";
+    }
 
-                document.getElementById('expires').textContent =
-                    new Date(data.expiresAt).toLocaleString();});
+    const stateLoading = document.getElementById("stateLoading");
+    const stateReady = document.getElementById("stateReady");
+    const stateError = document.getElementById("stateError");
 
-        document.getElementById('downloadBtn').addEventListener('click', () => {
-            window.location.href = `/api/files/${id}`;});
-    </script>
+    function showState(el) {
+      [stateLoading, stateReady, stateError].forEach((s) => s.classList.add("hidden"));
+      el.classList.remove("hidden");
+    }
+
+    function showError(kind) {
+      const title = document.getElementById("errorTitle");
+      const text = document.getElementById("errorText");
+      if (kind === "not-found") {
+        title.textContent = "Link not found";
+        text.textContent = "This link doesn't exist or may have been removed.";
+      } else if (kind === "expired") {
+        title.textContent = "This link has expired";
+        text.textContent = "For privacy, files are automatically deleted 24 hours after upload.";
+      } else {
+        title.textContent = "Something went wrong";
+        text.textContent = "We couldn't load this file's details. Please try again.";
+      }
+      showState(stateError);
+    }
+
+    function renderReady(data) {
+      document.getElementById("fileIcon").textContent = getFileIcon(data.filename);
+      document.getElementById("filename").textContent = data.filename;
+      document.getElementById("filesize").textContent = formatBytes(data.size);
+      const expiresEl = document.getElementById("expires");
+      expiresEl.textContent = formatExpiry(data.expiresAt);
+      expiresEl.title = new Date(data.expiresAt).toLocaleString();
+      showState(stateReady);
+    }
+
+    const id = window.location.pathname.split("/").filter(Boolean).pop();
+
+    async function loadFileInfo() {
+      let res;
+      try {
+        res = await fetch(`/api/file-info/${id}`);
+      } catch (err) {
+        return showError("generic");
+      }
+      if (!res.ok) {
+        if (res.status === 404) return showError("not-found");
+        if (res.status === 410) return showError("expired");
+        return showError("generic");
+      }
+      let data;
+      try {
+        data = await res.json();
+      } catch (err) {
+        return showError("generic");
+      }
+      renderReady(data);
+    }
+
+    document.getElementById("downloadBtn")?.addEventListener("click", () => {
+      window.location.href = `/api/files/${id}`;
+    });
+
+    loadFileInfo();
+  </script>
 </body>
 </html>
