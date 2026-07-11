@@ -127,6 +127,23 @@ app.use((err, req, res, next) => {
     next(err);
 });
 
+// Clear expired files
+setInterval(() => {
+    const timestamp = Date.now();
+    const files = db.prepare("SELECT * FROM files WHERE expires_at < ?").all(timestamp)
+    for (const file of files) {
+        fs.unlink(
+            path.join(__dirname, "uploads", file.stored_name),
+            (err) => {
+                if (err) {
+                    console.log(err)
+                }
+                db.prepare("DELETE FROM files WHERE id = ?").run(file.id);
+            }
+        )
+    }
+}, 60 * 60 * 100);
+
 app.listen(3000, () => {
     console.log("Server running on http://localhost:3000");
 });
