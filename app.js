@@ -115,9 +115,9 @@ app.get("/api/files/:id", (req, res) => {
 });
 });
 
-app.post("/api/upload", uploadLimiter, upload.single("file"), (req, res) => {
-    console.log("Received file:", req.file);
-    if (!req.file) {
+app.post("/api/upload", uploadLimiter, upload.array("files"), async (req, res) => {
+    console.log("Received files:", req.files);
+    if (!req.files || req.files.length === 0) {
         return res.status(400).json({ error: "No file uploaded." });
     }
 

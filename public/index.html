@@ -31,33 +31,27 @@
         <img class="brand__mark" src="/img/logo-mark.svg" alt="" width="32" height="32">
         <span class="brand__name">Droply</span>
       </a>
-      <p class="tagline">Drop a file. Get a link. It's gone in 24 hours.</p>
+      <p class="tagline">Drop your files. Get a link. It's gone in 24 hours.</p>
 
       <div class="card">
-        <!-- Form state: idle / file selected / uploading -->
+        <!-- Form state: idle / files selected / uploading -->
         <div id="formState">
-          <h1 class="card__title">Share a file</h1>
-          <p class="card__subtitle">Drag &amp; drop below, or click to browse.</p>
+          <h1 class="card__title">Share files</h1>
+          <p class="card__subtitle">Drag &amp; drop below, or click to browse. Select several files to bundle them into a ZIP.</p>
 
-          <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Choose a file to upload">
+          <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Choose files to upload">
             <svg class="dropzone__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M12 3v12"/>
               <path d="M7 8l5-5 5 5"/>
               <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>
             </svg>
-            <p class="dropzone__text">Drag &amp; drop your file here</p>
-            <p class="dropzone__hint">or click to browse &mdash; up to 5 GB</p>
-            <input type="file" id="fileInput" />
+            <p class="dropzone__text">Drag &amp; drop your files here</p>
+            <p class="dropzone__hint">or click to browse &mdash; up to 5 GB per file</p>
+            <input type="file" id="fileInput" multiple />
           </div>
 
-          <div class="file-chip hidden" id="fileChip">
-            <span class="file-chip__icon" id="fileChipIcon" aria-hidden="true"></span>
-            <span class="file-chip__meta">
-              <span class="file-chip__name" id="fileChipName"></span>
-              <span class="file-chip__size" id="fileChipSize"></span>
-            </span>
-            <button type="button" class="file-chip__remove" id="fileChipRemove" aria-label="Remove selected file">&times;</button>
-          </div>
+          <div class="file-list" id="fileList"></div>
+          <p class="file-list__summary hidden" id="fileListSummary"></p>
 
           <div class="progress hidden" id="progressWrap">
             <div class="progress__bar" id="progressBar"></div>
@@ -99,7 +93,7 @@
   </div>
 
   <script>
-    const MAX_SIZE = 5 * 1024 * 1024 * 1024; // 5 GB
+    const MAX_SIZE = 5 * 1024 * 1024 * 1024; // 5 GB per file
 
     function formatBytes(bytes) {
       if (bytes === 0) return "0 B";
@@ -154,31 +148,10 @@
       document.body.removeChild(temp);
     }
 
-  <div class="container">
-    <h1>Droply</h1>
-    <p>Drop a file or select one</p>
-
-    <div class="dropzone" id="dropzone">
-      <p>Drag & Drop your file here</p>
-      <p>or click to browse</p>
-      <input type="file" id="fileInput" multiple/>
-    </div>
-
-    <div class="file-info" id="fileInfo">No file selected</div>
-
-    <button id="uploadBtn" disabled>Create URL</button>
-
-    <div class="url-box" id="urlBox"></div>
-  </div>
-
-  <script>
     const dropzone = document.getElementById("dropzone");
     const fileInput = document.getElementById("fileInput");
-    const fileChip = document.getElementById("fileChip");
-    const fileChipIcon = document.getElementById("fileChipIcon");
-    const fileChipName = document.getElementById("fileChipName");
-    const fileChipSize = document.getElementById("fileChipSize");
-    const fileChipRemove = document.getElementById("fileChipRemove");
+    const fileList = document.getElementById("fileList");
+    const fileListSummary = document.getElementById("fileListSummary");
     const uploadBtn = document.getElementById("uploadBtn");
     const uploadError = document.getElementById("uploadError");
     const uploadErrorText = document.getElementById("uploadErrorText");
@@ -194,56 +167,105 @@
 
     let selectedFiles = [];
 
-    dropzone.addEventListener("click", () => fileInput.click());
+    function showUploadError(message) {
+      uploadErrorText.textContent = message;
+      uploadError.classList.remove("hidden");
+    }
 
-    fileInput.addEventListener("change", (e) => {
-      handleFiles(e.target.files);
-    });
+    function hideUploadError() {
+      uploadError.classList.add("hidden");
+    }
 
-    dropzone.addEventListener("dragover", (e) => {
-      e.preventDefault();
-      dropzone.classList.add("dragover");
-    });
+    function renderFileList() {
+      fileList.innerHTML = "";
 
-    dropzone.addEventListener("dragleave", () => {
-      dropzone.classList.remove("dragover");
-    });
+      selectedFiles.forEach((file, index) => {
+        const chip = document.createElement("div");
+        chip.className = "file-chip";
 
-    dropzone.addEventListener("drop", (e) => {
-      e.preventDefault();
-      dropzone.classList.remove("dragover");
-      handleFiles(e.dataTransfer.files);
-    });
+        const icon = document.createElement("span");
+        icon.className = "file-chip__icon";
+        icon.setAttribute("aria-hidden", "true");
+        icon.textContent = getFileIcon(file.name);
 
+        const meta = document.createElement("span");
+        meta.className = "file-chip__meta";
+        const name = document.createElement("span");
+        name.className = "file-chip__name";
+        name.textContent = file.name;
+        const size = document.createElement("span");
+        size.className = "file-chip__size";
+        size.textContent = formatBytes(file.size);
+        meta.appendChild(name);
+        meta.appendChild(size);
 
-    uploadBtn.addEventListener("click", async () => {
-      if (selectedFiles.length === 0) return;
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "file-chip__remove";
+        remove.setAttribute("aria-label", `Remove ${file.name}`);
+        remove.dataset.index = String(index);
+        remove.innerHTML = "&times;";
+
+        chip.appendChild(icon);
+        chip.appendChild(meta);
+        chip.appendChild(remove);
+        fileList.appendChild(chip);
+      });
+
+      if (selectedFiles.length === 0) {
+        fileListSummary.classList.add("hidden");
+        uploadBtn.disabled = true;
+      } else {
+        const totalSize = selectedFiles.reduce((sum, f) => sum + f.size, 0);
+        const zipNote = selectedFiles.length > 1 ? " — will be bundled into a ZIP." : "";
+        const label = selectedFiles.length > 1 ? `${selectedFiles.length} files selected` : "1 file selected";
+        fileListSummary.textContent = `${label} · ${formatBytes(totalSize)}${zipNote}`;
+        fileListSummary.classList.remove("hidden");
+        uploadBtn.disabled = false;
+      }
+    }
+
+    function addFiles(fileListObj) {
+      hideUploadError();
+      const incoming = Array.from(fileListObj);
+      let rejected = null;
+
+      for (const file of incoming) {
+        if (file.size > MAX_SIZE) {
+          rejected = file.name;
+          continue;
+        }
+        selectedFiles.push(file);
+      }
+
+      if (rejected) {
+        showUploadError(`"${rejected}" exceeds the 5 GB limit and was skipped.`);
+      }
+
+      renderFileList();
+    }
+
+    function resetToIdle() {
+      selectedFiles = [];
+      fileInput.value = "";
+      renderFileList();
+      uploadBtn.textContent = "Create link";
+      progressWrap.classList.add("hidden");
+      progressLabel.classList.add("hidden");
+      hideUploadError();
+      formState.classList.remove("hidden");
+      successState.classList.add("hidden");
+    }
 
     dropzone.addEventListener("click", () => fileInput.click());
     dropzone.addEventListener("keydown", (e) => {
       if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fileInput.click(); }
     });
 
-      const formData = new FormData();
-      for (const file of selectedFiles) {
-        formData.append("files", file);
-      }
-
-      try {
-        const res = await fetch("/api/upload", {
-          method: "POST",
-          body: formData
-        });
-
-        const data = await res.json();
-
-        urlBox.innerHTML = `
-          <p>✅ Your link:</p>
-          <a href="${data.url}" target="_blank">${data.url}</a>
-        `;
-      } catch (err) {
-        urlBox.textContent = "Error uploading file.";
-      }
+    fileInput.addEventListener("change", (e) => {
+      addFiles(e.target.files);
+      fileInput.value = "";
+    });
 
     dropzone.addEventListener("dragover", (e) => {
       e.preventDefault();
@@ -253,18 +275,24 @@
     dropzone.addEventListener("drop", (e) => {
       e.preventDefault();
       dropzone.classList.remove("is-dragover");
-      selectFile(e.dataTransfer.files[0]);
+      addFiles(e.dataTransfer.files);
     });
 
-    fileChipRemove.addEventListener("click", resetToIdle);
-    resetBtn.addEventListener("click", resetToIdle);
+    fileList.addEventListener("click", (e) => {
+      const btn = e.target.closest(".file-chip__remove");
+      if (!btn) return;
+      const index = Number(btn.dataset.index);
+      selectedFiles.splice(index, 1);
+      renderFileList();
+    });
 
+    resetBtn.addEventListener("click", resetToIdle);
     copyBtn.addEventListener("click", () => copyToClipboard(linkInput.value, copyBtn));
 
-    function uploadFile(file) {
+    function uploadFiles(files) {
       const xhr = new XMLHttpRequest();
       const formData = new FormData();
-      formData.append("file", file);
+      files.forEach((file) => formData.append("files", file));
 
       uploadBtn.disabled = true;
       uploadBtn.textContent = "Uploading…";
@@ -309,9 +337,9 @@
     }
 
     uploadBtn.addEventListener("click", () => {
-      if (!selectedFile) return;
+      if (selectedFiles.length === 0) return;
       hideUploadError();
-      uploadFile(selectedFile);
+      uploadFiles(selectedFiles);
     });
   </script>
 

@@ -294,8 +294,15 @@ img, svg { display: block; max-width: 100%; }
   border-radius: var(--radius-md);
 }
 .file-chip__icon { font-size: 24px; line-height: 1; }
-.file-chip__meta { flex: 1; min-width: 0; }
+.file-chip__meta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
 .file-chip__name {
+  min-width: 0;
   font-size: 14px;
   font-weight: 500;
   white-space: nowrap;
@@ -303,6 +310,7 @@ img, svg { display: block; max-width: 100%; }
   text-overflow: ellipsis;
 }
 .file-chip__size {
+  flex-shrink: 0;
   font-size: 12px;
   color: var(--color-text-faint);
 }
@@ -321,6 +329,19 @@ img, svg { display: block; max-width: 100%; }
 .file-chip__remove:hover {
   background: var(--color-surface-hover);
   color: var(--color-text);
+}
+
+.file-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+.file-list__summary {
+  margin-top: var(--space-3);
+  font-size: 13px;
+  color: var(--color-text-muted);
+  text-align: center;
 }
 
 /* ---------- Progress bar ---------- */
