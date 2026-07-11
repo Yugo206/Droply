@@ -154,6 +154,24 @@
       document.body.removeChild(temp);
     }
 
+  <div class="container">
+    <h1>Droply</h1>
+    <p>Drop a file or select one</p>
+
+    <div class="dropzone" id="dropzone">
+      <p>Drag & Drop your file here</p>
+      <p>or click to browse</p>
+      <input type="file" id="fileInput" multiple/>
+    </div>
+
+    <div class="file-info" id="fileInfo">No file selected</div>
+
+    <button id="uploadBtn" disabled>Create URL</button>
+
+    <div class="url-box" id="urlBox"></div>
+  </div>
+
+  <script>
     const dropzone = document.getElementById("dropzone");
     const fileInput = document.getElementById("fileInput");
     const fileChip = document.getElementById("fileChip");
@@ -174,55 +192,58 @@
     const copyBtn = document.getElementById("copyBtn");
     const resetBtn = document.getElementById("resetBtn");
 
-    let selectedFile = null;
+    let selectedFiles = [];
 
-    function showUploadError(message) {
-      uploadErrorText.textContent = message;
-      uploadError.classList.remove("hidden");
-    }
+    dropzone.addEventListener("click", () => fileInput.click());
 
-    function hideUploadError() {
-      uploadError.classList.add("hidden");
-    }
+    fileInput.addEventListener("change", (e) => {
+      handleFiles(e.target.files);
+    });
 
-    function selectFile(file) {
-      if (!file) return;
-      hideUploadError();
+    dropzone.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      dropzone.classList.add("dragover");
+    });
 
-      if (file.size > MAX_SIZE) {
-        showUploadError("This file exceeds the 5 GB limit.");
-        return;
-      }
+    dropzone.addEventListener("dragleave", () => {
+      dropzone.classList.remove("dragover");
+    });
 
-      selectedFile = file;
-      dropzone.classList.add("hidden");
-      fileChipIcon.textContent = getFileIcon(file.name);
-      fileChipName.textContent = file.name;
-      fileChipSize.textContent = formatBytes(file.size);
-      fileChip.classList.remove("hidden");
-      uploadBtn.disabled = false;
-    }
+    dropzone.addEventListener("drop", (e) => {
+      e.preventDefault();
+      dropzone.classList.remove("dragover");
+      handleFiles(e.dataTransfer.files);
+    });
 
-    function resetToIdle() {
-      selectedFile = null;
-      fileInput.value = "";
-      dropzone.classList.remove("hidden");
-      fileChip.classList.add("hidden");
-      uploadBtn.disabled = true;
-      uploadBtn.textContent = "Create link";
-      progressWrap.classList.add("hidden");
-      progressLabel.classList.add("hidden");
-      hideUploadError();
-      formState.classList.remove("hidden");
-      successState.classList.add("hidden");
-    }
+
+    uploadBtn.addEventListener("click", async () => {
+      if (selectedFiles.length === 0) return;
 
     dropzone.addEventListener("click", () => fileInput.click());
     dropzone.addEventListener("keydown", (e) => {
       if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fileInput.click(); }
     });
 
-    fileInput.addEventListener("change", (e) => selectFile(e.target.files[0]));
+      const formData = new FormData();
+      for (const file of selectedFiles) {
+        formData.append("files", file);
+      }
+
+      try {
+        const res = await fetch("/api/upload", {
+          method: "POST",
+          body: formData
+        });
+
+        const data = await res.json();
+
+        urlBox.innerHTML = `
+          <p>✅ Your link:</p>
+          <a href="${data.url}" target="_blank">${data.url}</a>
+        `;
+      } catch (err) {
+        urlBox.textContent = "Error uploading file.";
+      }
 
     dropzone.addEventListener("dragover", (e) => {
       e.preventDefault();
