@@ -3,4 +3,3 @@
 .idea
 *.iml
 node_modules/
-*.db
