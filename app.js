@@ -1,19 +1,21 @@
 const express = require("express");
 const Database = require("better-sqlite3");
-const db = new Database("database.db");
 const { nanoid } = require("nanoid");
 const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
 
-if (!fs.existsSync("uploads")) {
-    fs.mkdirSync("uploads");
+const db = new Database(path.join(__dirname, "database.db"));
+const UPLOADS_DIR = path.join(__dirname, "uploads");
+
+if (!fs.existsSync(UPLOADS_DIR)) {
+    fs.mkdirSync(UPLOADS_DIR);
 }
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024 * 1024; // 5 GB
 
 const storage = multer.diskStorage({
-    destination: "uploads/",
+    destination: UPLOADS_DIR,
     filename: (req, file, cb) => {
         const storedName = `${nanoid(16)}${path.extname(file.originalname)}`;
         cb(null, storedName);
@@ -79,7 +81,7 @@ app.get("/api/files/:id", (req, res) => {
         return res.status(410).json({ error: "File has expired." });
     }
 
-    res.download(path.join(__dirname, "uploads", file.stored_name), file.filename, (err) => {
+    res.download(path.join(UPLOADS_DIR, file.stored_name), file.filename, (err) => {
     if (err) {
         return res.status(500).json({ error: "Error sending file." });
     }
@@ -128,12 +130,12 @@ app.use((err, req, res, next) => {
 });
 
 // Clear expired files
-setInterval(() => {
+function clearExpiredFiles() {
     const timestamp = Date.now();
     const files = db.prepare("SELECT * FROM files WHERE expires_at < ?").all(timestamp)
     for (const file of files) {
         fs.unlink(
-            path.join(__dirname, "uploads", file.stored_name),
+            path.join(UPLOADS_DIR, file.stored_name),
             (err) => {
                 if (err) {
                     console.log(err)
@@ -142,7 +144,10 @@ setInterval(() => {
             }
         )
     }
-}, 60 * 60 * 100);
+}
+
+clearExpiredFiles();
+setInterval(clearExpiredFiles, 60 * 60 * 1000);
 
 app.listen(3000, () => {
     console.log("Server running on http://localhost:3000");
