@@ -4,12 +4,87 @@ const { nanoid } = require("nanoid");
 const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
+const rateLimit = require("express-rate-limit");
+const { ZipArchive } = require("archiver");
 
 const db = new Database(path.join(__dirname, "database.db"));
 const UPLOADS_DIR = path.join(__dirname, "uploads");
 
 if (!fs.existsSync(UPLOADS_DIR)) {
     fs.mkdirSync(UPLOADS_DIR);
+}
+
+// Extensions that can execute code on the recipient's machine when opened.
+// Based on the set Gmail blocks for attachments.
+const DANGEROUS_EXTENSIONS = new Set([
+    "exe", "dll", "com", "bat", "cmd", "msi", "msp", "msix", "msixbundle",
+    "appx", "appxbundle", "scr", "ps1", "psc1", "psm1", "vb", "vbe", "vbs",
+    "js", "jse", "wsf", "wsh", "hta", "cpl", "msc", "jar", "apk",
+    "sh", "bash", "bin", "run", "out", "action", "workflow",
+    "reg", "scf", "sct", "shb", "shs", "lnk", "pif", "vxd", "sys", "iso", "img"
+]);
+
+// Magic-byte signatures of executable/script formats, used to catch files
+// that were renamed to hide their real type (e.g. malware.exe -> photo.jpg).
+const EXECUTABLE_SIGNATURES = [
+    { name: "Windows PE executable (.exe/.dll)", bytes: [0x4d, 0x5a] },
+    { name: "ELF executable", bytes: [0x7f, 0x45, 0x4c, 0x46] },
+    { name: "Mach-O executable", bytes: [0xfe, 0xed, 0xfa, 0xce] },
+    { name: "Mach-O executable", bytes: [0xfe, 0xed, 0xfa, 0xcf] },
+    { name: "Mach-O executable", bytes: [0xce, 0xfa, 0xed, 0xfe] },
+    { name: "Mach-O executable", bytes: [0xcf, 0xfa, 0xed, 0xfe] },
+    { name: "Mach-O universal binary / Java class", bytes: [0xca, 0xfe, 0xba, 0xbe] },
+    { name: "shell script (shebang)", bytes: [0x23, 0x21] }
+];
+
+function matchesSignature(buffer, bytes) {
+    if (buffer.length < bytes.length) return false;
+    return bytes.every((byte, i) => buffer[i] === byte);
+}
+
+function detectExecutableSignature(buffer) {
+    return EXECUTABLE_SIGNATURES.find((sig) => matchesSignature(buffer, sig.bytes)) || null;
+}
+
+function validateFile(filePath, originalname) {
+    const ext = path.extname(originalname).slice(1).toLowerCase();
+
+    if (DANGEROUS_EXTENSIONS.has(ext)) {
+        return { valid: false, reason: `Files of type ".${ext}" are not allowed.` };
+    }
+
+    const header = Buffer.alloc(4);
+    const fd = fs.openSync(filePath, "r");
+    const bytesRead = fs.readSync(fd, header, 0, 4, 0);
+    fs.closeSync(fd);
+
+    const signature = detectExecutableSignature(header.subarray(0, bytesRead));
+    if (signature) {
+        return {
+            valid: false,
+            reason: `File content was identified as a ${signature.name}, which is not allowed.`
+        };
+    }
+
+    return { valid: true };
+}
+
+async function createZip(files, zipPath) {
+    return new Promise((resolve, reject) => {
+        const output = fs.createWriteStream(zipPath);
+        const archive = new ZipArchive({ zlib: { level: 9 } });
+
+        output.on("close", () => resolve());
+        archive.on("error", (err) => reject(err));
+
+        archive.pipe(output);
+
+        for (const file of files) {
+            archive.file(file.path, { name: file.originalname });
+        }
+
+        archive.finalize();
+    });
 }
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024 * 1024; // 5 GB
@@ -34,13 +109,22 @@ CREATE TABLE IF NOT EXISTS files (
     stored_name TEXT NOT NULL,
     size INTEGER,
     created_at INTEGER,
-    expires_at INTEGER
+    expires_at INTEGER,
+    isZip INTEGER
 )
 `).run();
 
 const app = express();
 
 app.use(express.static("public"));
+
+const uploadLimiter = rateLimit({
+    windowMs: 60 * 60 * 1000,
+    max: 10,
+    message: {
+        error: "Too many uploads. Try again later."
+    }
+});
 
 // return page
 app.get("/", (req, res) => {
@@ -54,7 +138,7 @@ app.get("/f/:id", (req, res) => {
 // front-end API
 app.get("/api/file-info/:id", (req, res) => {
     const file = db.prepare("SELECT * FROM files WHERE id = ?").get(req.params.id);
-    
+
     if (!file) {
         return res.status(404).send("File not found.");
     }
@@ -72,7 +156,7 @@ app.get("/api/file-info/:id", (req, res) => {
 
 app.get("/api/files/:id", (req, res) => {
     const file = db.prepare("SELECT * FROM files WHERE id = ?").get(req.params.id);
-    
+
     if (!file) {
         return res.status(404).json({ error: "File not found." });
     }
@@ -88,26 +172,68 @@ app.get("/api/files/:id", (req, res) => {
 });
 });
 
-app.post("/api/upload", upload.single("file"), (req, res) => {
-    console.log("Received file:", req.file);
-    if (!req.file) {
+app.post("/api/upload", uploadLimiter, upload.array("files"), async (req, res) => {
+    if (!req.files || req.files.length === 0) {
         return res.status(400).json({ error: "No file uploaded." });
     }
 
+    const invalidFiles = [];
+    for (const file of req.files) {
+        const result = validateFile(file.path, file.originalname);
+        if (!result.valid) {
+            invalidFiles.push({ filename: file.originalname, reason: result.reason });
+        }
+    }
+
+    if (invalidFiles.length > 0) {
+        for (const file of req.files) {
+            fs.unlink(file.path, () => {});
+        }
+        return res.status(415).json({
+            error: "One or more files failed validation.",
+            details: invalidFiles
+        });
+    }
+
+    let isZip = 0;
+    let filename;
+    let storedName;
+    let size;
     const id = nanoid(8);
     const createdAt = Date.now();
     const expiresAt = createdAt + (24 * 60 * 60 * 1000);
 
+    if (req.files.length === 1) {
+    filename = req.files[0].originalname;
+    storedName = req.files[0].filename;
+    size = req.files[0].size;
+    } else {
+    isZip = 1;
+
+    const zipPath = path.join(UPLOADS_DIR, `${nanoid(16)}.zip`);
+
+    await createZip(req.files, zipPath);
+
+    filename = "archive.zip";
+    storedName = path.basename(zipPath);
+    size = fs.statSync(zipPath).size;
+
+    for (const file of req.files) {
+        fs.unlinkSync(file.path);
+    }
+    }
+
     db.prepare(`
-        INSERT INTO files (id, filename, stored_name, size, created_at, expires_at)
-        VALUES (?, ?, ?, ?, ?, ?)
+        INSERT INTO files (id, filename, stored_name, size, created_at, expires_at, isZip)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
     `).run(
         id,
-        req.file.originalname,
-        req.file.filename,
-        req.file.size,
+        filename,
+        storedName,
+        size,
         createdAt,
-        expiresAt
+        expiresAt,
+        isZip
     );
 
     const url = `${req.protocol}://${req.get("host")}/f/${id}`;

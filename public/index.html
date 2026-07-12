@@ -3,197 +3,344 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Drova</title>
+  <title>Droply — Share files, fast</title>
+  <meta name="description" content="Droply — share files fast with a short link. No account required.">
+  <meta name="theme-color" content="#0a0e1a">
 
-  <style>
-    body {
-      margin: 0;
-      font-family: Arial, sans-serif;
-      background: linear-gradient(135deg, #0f172a, #1e293b);
-      color: white;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
-    }
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Droply">
+  <meta property="og:description" content="Share files instantly with Droply.">
 
-    .container {
-      width: 90%;
-      max-width: 500px;
-      background: rgba(255,255,255,0.05);
-      border: 1px solid rgba(255,255,255,0.1);
-      border-radius: 16px;
-      padding: 24px;
-      backdrop-filter: blur(10px);
-      box-shadow: 0 10px 40px rgba(0,0,0,0.4);
-      text-align: center;
-    }
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="apple-touch-icon" href="/favicon.svg">
 
-    h1 {
-      margin-bottom: 10px;
-      font-size: 24px;
-    }
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 
-    .dropzone {
-      border: 2px dashed rgba(255,255,255,0.3);
-      border-radius: 12px;
-      padding: 40px 20px;
-      margin-top: 20px;
-      cursor: pointer;
-      transition: 0.2s;
-    }
-
-    .dropzone:hover {
-      border-color: #38bdf8;
-      background: rgba(56,189,248,0.1);
-    }
-
-    .dropzone.dragover {
-      border-color: #22c55e;
-      background: rgba(34,197,94,0.15);
-    }
-
-    input[type="file"] {
-      display: none;
-    }
-
-    .file-info {
-      margin-top: 15px;
-      font-size: 14px;
-      opacity: 0.8;
-    }
-
-    button {
-      margin-top: 20px;
-      width: 100%;
-      padding: 12px;
-      border: none;
-      border-radius: 10px;
-      background: #38bdf8;
-      color: black;
-      font-weight: bold;
-      cursor: pointer;
-      transition: 0.2s;
-    }
-
-    button:hover {
-      background: #0ea5e9;
-    }
-
-    button:disabled {
-      background: #334155;
-      color: #94a3b8;
-      cursor: not-allowed;
-    }
-
-    .url-box {
-      margin-top: 15px;
-      word-break: break-all;
-      font-size: 13px;
-      opacity: 0.9;
-    }
-  </style>
+  <link rel="stylesheet" href="/css/style.css">
 </head>
 
 <body>
 
-  <div class="container">
-    <h1>Droply</h1>
-    <p>Drop a file or select one</p>
+  <div class="bg-blobs"><span></span></div>
 
-    <div class="dropzone" id="dropzone">
-      <p>Drag & Drop your file here</p>
-      <p>or click to browse</p>
-      <input type="file" id="fileInput"/>
+  <div class="page">
+    <div class="shell">
+      <a class="brand" href="/">
+        <img class="brand__mark" src="/img/logo-mark.svg" alt="" width="32" height="32">
+        <span class="brand__name">Droply</span>
+      </a>
+      <p class="tagline">Drop your files. Get a link. It's gone in 24 hours.</p>
+
+      <div class="card">
+        <!-- Form state: idle / files selected / uploading -->
+        <div id="formState">
+          <h1 class="card__title">Share files</h1>
+          <p class="card__subtitle">Drag &amp; drop below, or click to browse. Select several files to bundle them into a ZIP.</p>
+
+          <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Choose files to upload">
+            <svg class="dropzone__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 3v12"/>
+              <path d="M7 8l5-5 5 5"/>
+              <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>
+            </svg>
+            <p class="dropzone__text">Drag &amp; drop your files here</p>
+            <p class="dropzone__hint">or click to browse &mdash; up to 5 GB per file</p>
+            <input type="file" id="fileInput" multiple />
+          </div>
+
+          <div class="file-list" id="fileList"></div>
+          <p class="file-list__summary hidden" id="fileListSummary"></p>
+
+          <div class="progress hidden" id="progressWrap">
+            <div class="progress__bar" id="progressBar"></div>
+          </div>
+          <p class="progress__label hidden" id="progressLabel" aria-live="polite"></p>
+
+          <button class="btn btn--primary mt-4" id="uploadBtn" disabled>Create link</button>
+
+          <div class="alert alert--error hidden mt-4" id="uploadError" aria-live="polite">
+            <span class="alert__icon" aria-hidden="true">&#9888;&#65039;</span>
+            <div>
+              <p class="alert__title">Upload failed</p>
+              <p class="alert__text" id="uploadErrorText"></p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Success state -->
+        <div id="successState" class="hidden">
+          <div class="alert alert--success">
+            <span class="alert__icon" aria-hidden="true">&#9989;</span>
+            <div>
+              <p class="alert__title">Your link is ready</p>
+              <p class="alert__text" id="successExpiry"></p>
+            </div>
+          </div>
+
+          <div class="link-box mt-4">
+            <input type="text" class="link-box__input" id="linkInput" readonly>
+            <button type="button" class="btn btn--primary link-box__copy" id="copyBtn">Copy</button>
+          </div>
+
+          <button type="button" class="btn btn--secondary mt-4" id="resetBtn">Upload another file</button>
+        </div>
+      </div>
+
+      <p class="footer-note">No account required. Files are deleted automatically after 24 hours.</p>
     </div>
-
-    <div class="file-info" id="fileInfo">No file selected</div>
-
-    <button id="uploadBtn" disabled>Create URL</button>
-
-    <div class="url-box" id="urlBox"></div>
   </div>
 
   <script>
+    const MAX_SIZE = 5 * 1024 * 1024 * 1024; // 5 GB per file
+
+    function formatBytes(bytes) {
+      if (bytes === 0) return "0 B";
+      const units = ["B", "KB", "MB", "GB"];
+      const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+      const value = bytes / Math.pow(1024, i);
+      return `${value.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
+    }
+
+    function formatExpiry(expiresAtMs) {
+      const diff = expiresAtMs - Date.now();
+      if (diff <= 0) return "This link has expired.";
+      const hours = Math.floor(diff / 3600000);
+      const minutes = Math.floor((diff % 3600000) / 60000);
+      if (hours > 0) return `Expires in ${hours}h ${minutes}m.`;
+      return `Expires in ${minutes}m.`;
+    }
+
+    function getFileIcon(filename) {
+      const ext = (filename.split(".").pop() || "").toLowerCase();
+      if (["png", "jpg", "jpeg", "gif", "svg", "webp"].includes(ext)) return "\u{1F5BC}️";
+      if (["mp4", "mov", "avi", "mkv", "webm"].includes(ext)) return "\u{1F3AC}";
+      if (["mp3", "wav", "flac", "ogg"].includes(ext)) return "\u{1F3B5}";
+      if (["zip", "rar", "7z", "tar", "gz"].includes(ext)) return "\u{1F5DC}️";
+      if (ext === "pdf") return "\u{1F4D5}";
+      if (["doc", "docx", "txt", "md"].includes(ext)) return "\u{1F4C4}";
+      if (["js", "ts", "py", "html", "css", "json", "java", "c", "cpp"].includes(ext)) return "\u{1F9E9}";
+      return "\u{1F4E6}";
+    }
+
+    function copyToClipboard(text, btn) {
+      const done = () => {
+        const original = btn.textContent;
+        btn.textContent = "Copied!";
+        setTimeout(() => { btn.textContent = original; }, 2000);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done).catch(() => fallbackCopy(text, done));
+      } else {
+        fallbackCopy(text, done);
+      }
+    }
+
+    function fallbackCopy(text, done) {
+      const temp = document.createElement("textarea");
+      temp.value = text;
+      temp.style.position = "fixed";
+      temp.style.opacity = "0";
+      document.body.appendChild(temp);
+      temp.select();
+      try { document.execCommand("copy"); done(); } catch (err) { /* ignore */ }
+      document.body.removeChild(temp);
+    }
+
     const dropzone = document.getElementById("dropzone");
     const fileInput = document.getElementById("fileInput");
-    const fileInfo = document.getElementById("fileInfo");
+    const fileList = document.getElementById("fileList");
+    const fileListSummary = document.getElementById("fileListSummary");
     const uploadBtn = document.getElementById("uploadBtn");
-    const urlBox = document.getElementById("urlBox");
+    const uploadError = document.getElementById("uploadError");
+    const uploadErrorText = document.getElementById("uploadErrorText");
+    const progressWrap = document.getElementById("progressWrap");
+    const progressBar = document.getElementById("progressBar");
+    const progressLabel = document.getElementById("progressLabel");
+    const formState = document.getElementById("formState");
+    const successState = document.getElementById("successState");
+    const successExpiry = document.getElementById("successExpiry");
+    const linkInput = document.getElementById("linkInput");
+    const copyBtn = document.getElementById("copyBtn");
+    const resetBtn = document.getElementById("resetBtn");
 
-    let selectedFile = null;
+    let selectedFiles = [];
+
+    function showUploadError(message) {
+      uploadErrorText.textContent = message;
+      uploadError.classList.remove("hidden");
+    }
+
+    function hideUploadError() {
+      uploadError.classList.add("hidden");
+    }
+
+    function renderFileList() {
+      fileList.innerHTML = "";
+
+      selectedFiles.forEach((file, index) => {
+        const chip = document.createElement("div");
+        chip.className = "file-chip";
+
+        const icon = document.createElement("span");
+        icon.className = "file-chip__icon";
+        icon.setAttribute("aria-hidden", "true");
+        icon.textContent = getFileIcon(file.name);
+
+        const meta = document.createElement("span");
+        meta.className = "file-chip__meta";
+        const name = document.createElement("span");
+        name.className = "file-chip__name";
+        name.textContent = file.name;
+        const size = document.createElement("span");
+        size.className = "file-chip__size";
+        size.textContent = formatBytes(file.size);
+        meta.appendChild(name);
+        meta.appendChild(size);
+
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "file-chip__remove";
+        remove.setAttribute("aria-label", `Remove ${file.name}`);
+        remove.dataset.index = String(index);
+        remove.innerHTML = "&times;";
+
+        chip.appendChild(icon);
+        chip.appendChild(meta);
+        chip.appendChild(remove);
+        fileList.appendChild(chip);
+      });
+
+      if (selectedFiles.length === 0) {
+        fileListSummary.classList.add("hidden");
+        uploadBtn.disabled = true;
+      } else {
+        const totalSize = selectedFiles.reduce((sum, f) => sum + f.size, 0);
+        const zipNote = selectedFiles.length > 1 ? " — will be bundled into a ZIP." : "";
+        const label = selectedFiles.length > 1 ? `${selectedFiles.length} files selected` : "1 file selected";
+        fileListSummary.textContent = `${label} · ${formatBytes(totalSize)}${zipNote}`;
+        fileListSummary.classList.remove("hidden");
+        uploadBtn.disabled = false;
+      }
+    }
+
+    function addFiles(fileListObj) {
+      hideUploadError();
+      const incoming = Array.from(fileListObj);
+      let rejected = null;
+
+      for (const file of incoming) {
+        if (file.size > MAX_SIZE) {
+          rejected = file.name;
+          continue;
+        }
+        selectedFiles.push(file);
+      }
+
+      if (rejected) {
+        showUploadError(`"${rejected}" exceeds the 5 GB limit and was skipped.`);
+      }
+
+      renderFileList();
+    }
+
+    function resetToIdle() {
+      selectedFiles = [];
+      fileInput.value = "";
+      renderFileList();
+      uploadBtn.textContent = "Create link";
+      progressWrap.classList.add("hidden");
+      progressLabel.classList.add("hidden");
+      hideUploadError();
+      formState.classList.remove("hidden");
+      successState.classList.add("hidden");
+    }
 
     dropzone.addEventListener("click", () => fileInput.click());
+    dropzone.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fileInput.click(); }
+    });
 
     fileInput.addEventListener("change", (e) => {
-      handleFile(e.target.files[0]);
+      addFiles(e.target.files);
+      fileInput.value = "";
     });
 
     dropzone.addEventListener("dragover", (e) => {
       e.preventDefault();
-      dropzone.classList.add("dragover");
+      dropzone.classList.add("is-dragover");
     });
-
-    dropzone.addEventListener("dragleave", () => {
-      dropzone.classList.remove("dragover");
-    });
-
+    dropzone.addEventListener("dragleave", () => dropzone.classList.remove("is-dragover"));
     dropzone.addEventListener("drop", (e) => {
       e.preventDefault();
-      dropzone.classList.remove("dragover");
-      handleFile(e.dataTransfer.files[0]);
+      dropzone.classList.remove("is-dragover");
+      addFiles(e.dataTransfer.files);
     });
 
-    function handleFile(file) {
-      if (!file) return;
+    fileList.addEventListener("click", (e) => {
+      const btn = e.target.closest(".file-chip__remove");
+      if (!btn) return;
+      const index = Number(btn.dataset.index);
+      selectedFiles.splice(index, 1);
+      renderFileList();
+    });
 
-      selectedFile = file;
-      fileInfo.textContent = `${file.name} (${Math.round(file.size / 1024)} KB)`;
-      uploadBtn.disabled = false;
-    }
+    resetBtn.addEventListener("click", resetToIdle);
+    copyBtn.addEventListener("click", () => copyToClipboard(linkInput.value, copyBtn));
 
-    uploadBtn.addEventListener("click", async () => {
-      if (!selectedFile) return;
-
-      uploadBtn.textContent = "Creating URL...";
-
+    function uploadFiles(files) {
+      const xhr = new XMLHttpRequest();
       const formData = new FormData();
-      formData.append("file", selectedFile);
+      files.forEach((file) => formData.append("files", file));
 
-      try {
-        const res = await fetch("/api/upload", {
-          method: "POST",
-          body: formData
-        });
+      uploadBtn.disabled = true;
+      uploadBtn.textContent = "Uploading…";
+      progressWrap.classList.remove("hidden");
+      progressLabel.classList.remove("hidden");
+      progressBar.style.width = "0%";
+      progressLabel.textContent = "0%";
 
-        const data = await res.json();
+      xhr.upload.addEventListener("progress", (e) => {
+        if (!e.lengthComputable) return;
+        const pct = Math.round((e.loaded / e.total) * 100);
+        progressBar.style.width = `${pct}%`;
+        progressLabel.textContent = `${pct}%`;
+      });
 
-        urlBox.innerHTML = `
-          <p>✅ Your link:</p>
-          <a href="${data.url}" target="_blank">${data.url}</a>
-        `;
-      } catch (err) {
-        urlBox.textContent = "Error uploading file.";
-      }
+      xhr.addEventListener("load", () => {
+        let data = null;
+        try { data = JSON.parse(xhr.responseText); } catch (err) { /* ignore */ }
 
-      uploadBtn.textContent = "Create URL";
-    });
+        if (xhr.status >= 200 && xhr.status < 300 && data && data.success) {
+          linkInput.value = data.url;
+          successExpiry.textContent = formatExpiry(data.expiresAt);
+          formState.classList.add("hidden");
+          successState.classList.remove("hidden");
+        } else {
+          onUploadError((data && data.error) || "Upload failed. Please try again.");
+        }
+      });
 
-    const MAX_SIZE = 5 * 1024 * 1024 * 1024;
+      xhr.addEventListener("error", () => onUploadError("Network error. Please check your connection and try again."));
 
-    function handleFile(file) {
-      if (!file) return;
-
-      if (file.size > MAX_SIZE) {
-          fileInfo.textContent = "File exceeds the 5 GB limit.";
-          uploadBtn.disabled = true;
-          return;
-      }
-
-      selectedFile = file;
-      fileInfo.textContent = `${file.name} (${Math.round(file.size / 1024)} KB)`;
-      uploadBtn.disabled = false;
+      xhr.open("POST", "/api/upload");
+      xhr.send(formData);
     }
+
+    function onUploadError(message) {
+      progressWrap.classList.add("hidden");
+      progressLabel.classList.add("hidden");
+      uploadBtn.disabled = false;
+      uploadBtn.textContent = "Create link";
+      showUploadError(message);
+    }
+
+    uploadBtn.addEventListener("click", () => {
+      if (selectedFiles.length === 0) return;
+      hideUploadError();
+      uploadFiles(selectedFiles);
+    });
   </script>
 
 </body>
