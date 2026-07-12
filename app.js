@@ -1,6 +1,5 @@
 const express = require("express");
 const Database = require("better-sqlite3");
-const db = new Database("database.db");
 const { nanoid } = require("nanoid");
 const multer = require("multer");
 const path = require("path");
@@ -8,8 +7,11 @@ const fs = require("fs");
 const rateLimit = require("express-rate-limit");
 const { ZipArchive } = require("archiver");
 
-if (!fs.existsSync("uploads")) {
-    fs.mkdirSync("uploads");
+const db = new Database(path.join(__dirname, "database.db"));
+const UPLOADS_DIR = path.join(__dirname, "uploads");
+
+if (!fs.existsSync(UPLOADS_DIR)) {
+    fs.mkdirSync(UPLOADS_DIR);
 }
 
 // Extensions that can execute code on the recipient's machine when opened.
@@ -88,7 +90,7 @@ async function createZip(files, zipPath) {
 const MAX_FILE_SIZE = 5 * 1024 * 1024 * 1024; // 5 GB
 
 const storage = multer.diskStorage({
-    destination: "uploads/",
+    destination: UPLOADS_DIR,
     filename: (req, file, cb) => {
         const storedName = `${nanoid(16)}${path.extname(file.originalname)}`;
         cb(null, storedName);
@@ -136,7 +138,7 @@ app.get("/f/:id", (req, res) => {
 // front-end API
 app.get("/api/file-info/:id", (req, res) => {
     const file = db.prepare("SELECT * FROM files WHERE id = ?").get(req.params.id);
-    
+
     if (!file) {
         return res.status(404).send("File not found.");
     }
@@ -154,7 +156,7 @@ app.get("/api/file-info/:id", (req, res) => {
 
 app.get("/api/files/:id", (req, res) => {
     const file = db.prepare("SELECT * FROM files WHERE id = ?").get(req.params.id);
-    
+
     if (!file) {
         return res.status(404).json({ error: "File not found." });
     }
@@ -163,7 +165,7 @@ app.get("/api/files/:id", (req, res) => {
         return res.status(410).json({ error: "File has expired." });
     }
 
-    res.download(path.join(__dirname, "uploads", file.stored_name), file.filename, (err) => {
+    res.download(path.join(UPLOADS_DIR, file.stored_name), file.filename, (err) => {
     if (err) {
         return res.status(500).json({ error: "Error sending file." });
     }
@@ -208,7 +210,7 @@ app.post("/api/upload", uploadLimiter, upload.array("files"), async (req, res) =
     } else {
     isZip = 1;
 
-    const zipPath = path.join("uploads", `${nanoid(16)}.zip`);
+    const zipPath = path.join(UPLOADS_DIR, `${nanoid(16)}.zip`);
 
     await createZip(req.files, zipPath);
 
@@ -252,6 +254,26 @@ app.use((err, req, res, next) => {
 
     next(err);
 });
+
+// Clear expired files
+function clearExpiredFiles() {
+    const timestamp = Date.now();
+    const files = db.prepare("SELECT * FROM files WHERE expires_at < ?").all(timestamp)
+    for (const file of files) {
+        fs.unlink(
+            path.join(UPLOADS_DIR, file.stored_name),
+            (err) => {
+                if (err) {
+                    console.log(err)
+                }
+                db.prepare("DELETE FROM files WHERE id = ?").run(file.id);
+            }
+        )
+    }
+}
+
+clearExpiredFiles();
+setInterval(clearExpiredFiles, 60 * 60 * 1000);
 
 app.listen(3000, () => {
     console.log("Server running on http://localhost:3000");
