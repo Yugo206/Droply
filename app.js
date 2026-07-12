@@ -7,6 +7,7 @@ const path = require("path");
 const fs = require("fs");
 const rateLimit = require("express-rate-limit");
 const { ZipArchive } = require("archiver");
+const { validateFile } = require("./fileValidator");
 
 if (!fs.existsSync("uploads")) {
     fs.mkdirSync("uploads");
@@ -115,10 +116,27 @@ app.get("/api/files/:id", (req, res) => {
 });
 });
 
-app.post("/api/upload", uploadLimiter, upload.single("file"), (req, res) => {
-    console.log("Received file:", req.file);
-    if (!req.file) {
+app.post("/api/upload", uploadLimiter, upload.array("files"), async (req, res) => {
+    if (!req.files || req.files.length === 0) {
         return res.status(400).json({ error: "No file uploaded." });
+    }
+
+    const invalidFiles = [];
+    for (const file of req.files) {
+        const result = validateFile(file.path, file.originalname);
+        if (!result.valid) {
+            invalidFiles.push({ filename: file.originalname, reason: result.reason });
+        }
+    }
+
+    if (invalidFiles.length > 0) {
+        for (const file of req.files) {
+            fs.unlink(file.path, () => {});
+        }
+        return res.status(415).json({
+            error: "One or more files failed validation.",
+            details: invalidFiles
+        });
     }
 
     let isZip = 0;
