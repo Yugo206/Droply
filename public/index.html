@@ -58,6 +58,8 @@
           </div>
           <p class="progress__label hidden" id="progressLabel" aria-live="polite"></p>
 
+          <input type="password" class="text-input mt-4" id="passwordInput" placeholder="Mot de passe (optionnel)" autocomplete="new-password">
+
           <button class="btn btn--primary mt-4" id="uploadBtn" disabled>Create link</button>
 
           <div class="alert alert--error hidden mt-4" id="uploadError" aria-live="polite">
@@ -158,6 +160,7 @@
     const progressWrap = document.getElementById("progressWrap");
     const progressBar = document.getElementById("progressBar");
     const progressLabel = document.getElementById("progressLabel");
+    const passwordInput = document.getElementById("passwordInput");
     const formState = document.getElementById("formState");
     const successState = document.getElementById("successState");
     const successExpiry = document.getElementById("successExpiry");
@@ -248,6 +251,7 @@
     function resetToIdle() {
       selectedFiles = [];
       fileInput.value = "";
+      passwordInput.value = "";
       renderFileList();
       uploadBtn.textContent = "Create link";
       progressWrap.classList.add("hidden");
@@ -293,6 +297,9 @@
       const xhr = new XMLHttpRequest();
       const formData = new FormData();
       files.forEach((file) => formData.append("files", file));
+      if (passwordInput.value) {
+        formData.append("password", passwordInput.value);
+      }
 
       uploadBtn.disabled = true;
       uploadBtn.textContent = "Uploading…";
