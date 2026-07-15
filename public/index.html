@@ -58,6 +58,18 @@
           </div>
           <p class="progress__label hidden" id="progressLabel" aria-live="polite"></p>
 
+          <input type="password" class="text-input mt-4" id="passwordInput" placeholder="Mot de passe (optionnel)" autocomplete="new-password">
+
+          <div class="field-group mt-4">
+            <span class="field-group__label" id="maxDownloadsLabel">Nombre maximal de téléchargements</span>
+            <div class="segmented" role="group" aria-labelledby="maxDownloadsLabel" id="maxDownloadsGroup">
+              <button type="button" class="segmented__option" data-value="1" aria-pressed="false">1 téléchargement</button>
+              <button type="button" class="segmented__option" data-value="5" aria-pressed="false">5 téléchargements</button>
+              <button type="button" class="segmented__option" data-value="20" aria-pressed="false">20 téléchargements</button>
+              <button type="button" class="segmented__option is-selected" data-value="unlimited" aria-pressed="true">Illimité</button>
+            </div>
+          </div>
+
           <button class="btn btn--primary mt-4" id="uploadBtn" disabled>Create link</button>
 
           <div class="alert alert--error hidden mt-4" id="uploadError" aria-live="polite">
@@ -84,6 +96,12 @@
             <button type="button" class="btn btn--primary link-box__copy" id="copyBtn">Copy</button>
           </div>
 
+          <button type="button" class="btn btn--secondary mt-4" id="qrToggleBtn" aria-expanded="false" aria-controls="qrContainer">Afficher le QR Code</button>
+
+          <div class="qr-wrap hidden mt-4" id="qrContainer">
+            <div class="qr-code" id="qrCode"></div>
+          </div>
+
           <button type="button" class="btn btn--secondary mt-4" id="resetBtn">Upload another file</button>
         </div>
       </div>
@@ -92,6 +110,7 @@
     </div>
   </div>
 
+  <script src="/js/qrcode.js"></script>
   <script>
     const MAX_SIZE = 5 * 1024 * 1024 * 1024; // 5 GB per file
 
@@ -158,14 +177,37 @@
     const progressWrap = document.getElementById("progressWrap");
     const progressBar = document.getElementById("progressBar");
     const progressLabel = document.getElementById("progressLabel");
+    const passwordInput = document.getElementById("passwordInput");
+    const maxDownloadsGroup = document.getElementById("maxDownloadsGroup");
+    const maxDownloadsButtons = maxDownloadsGroup.querySelectorAll(".segmented__option");
     const formState = document.getElementById("formState");
     const successState = document.getElementById("successState");
     const successExpiry = document.getElementById("successExpiry");
     const linkInput = document.getElementById("linkInput");
     const copyBtn = document.getElementById("copyBtn");
     const resetBtn = document.getElementById("resetBtn");
+    const qrToggleBtn = document.getElementById("qrToggleBtn");
+    const qrContainer = document.getElementById("qrContainer");
+    const qrCode = document.getElementById("qrCode");
 
     let selectedFiles = [];
+    let selectedMaxDownloads = "unlimited";
+    let qrGenerated = false;
+
+    function selectMaxDownloads(value) {
+      selectedMaxDownloads = value;
+      maxDownloadsButtons.forEach((btn) => {
+        const isSelected = btn.dataset.value === value;
+        btn.classList.toggle("is-selected", isSelected);
+        btn.setAttribute("aria-pressed", String(isSelected));
+      });
+    }
+
+    maxDownloadsGroup.addEventListener("click", (e) => {
+      const btn = e.target.closest(".segmented__option");
+      if (!btn) return;
+      selectMaxDownloads(btn.dataset.value);
+    });
 
     function showUploadError(message) {
       uploadErrorText.textContent = message;
@@ -245,9 +287,44 @@
       renderFileList();
     }
 
+    function generateQrCode(url) {
+      const qr = qrcode(0, "M");
+      qr.addData(url);
+      qr.make();
+      qrCode.innerHTML = qr.createSvgTag({
+        scalable: true,
+        margin: 0,
+        alt: `Code QR pointant vers ${url}`
+      });
+    }
+
+    qrToggleBtn.addEventListener("click", () => {
+      const isHidden = qrContainer.classList.contains("hidden");
+      if (isHidden) {
+        if (!qrGenerated) {
+          generateQrCode(linkInput.value);
+          qrGenerated = true;
+        }
+        qrContainer.classList.remove("hidden");
+        qrToggleBtn.textContent = "Masquer le QR Code";
+        qrToggleBtn.setAttribute("aria-expanded", "true");
+      } else {
+        qrContainer.classList.add("hidden");
+        qrToggleBtn.textContent = "Afficher le QR Code";
+        qrToggleBtn.setAttribute("aria-expanded", "false");
+      }
+    });
+
     function resetToIdle() {
       selectedFiles = [];
       fileInput.value = "";
+      passwordInput.value = "";
+      selectMaxDownloads("unlimited");
+      qrGenerated = false;
+      qrCode.innerHTML = "";
+      qrContainer.classList.add("hidden");
+      qrToggleBtn.textContent = "Afficher le QR Code";
+      qrToggleBtn.setAttribute("aria-expanded", "false");
       renderFileList();
       uploadBtn.textContent = "Create link";
       progressWrap.classList.add("hidden");
@@ -293,6 +370,10 @@
       const xhr = new XMLHttpRequest();
       const formData = new FormData();
       files.forEach((file) => formData.append("files", file));
+      if (passwordInput.value) {
+        formData.append("password", passwordInput.value);
+      }
+      formData.append("maxDownloads", selectedMaxDownloads);
 
       uploadBtn.disabled = true;
       uploadBtn.textContent = "Uploading…";
