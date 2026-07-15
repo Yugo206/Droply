@@ -96,6 +96,12 @@
             <button type="button" class="btn btn--primary link-box__copy" id="copyBtn">Copy</button>
           </div>
 
+          <button type="button" class="btn btn--secondary mt-4" id="qrToggleBtn" aria-expanded="false" aria-controls="qrContainer">Afficher le QR Code</button>
+
+          <div class="qr-wrap hidden mt-4" id="qrContainer">
+            <div class="qr-code" id="qrCode"></div>
+          </div>
+
           <button type="button" class="btn btn--secondary mt-4" id="resetBtn">Upload another file</button>
         </div>
       </div>
@@ -104,6 +110,7 @@
     </div>
   </div>
 
+  <script src="/js/qrcode.js"></script>
   <script>
     const MAX_SIZE = 5 * 1024 * 1024 * 1024; // 5 GB per file
 
@@ -179,9 +186,13 @@
     const linkInput = document.getElementById("linkInput");
     const copyBtn = document.getElementById("copyBtn");
     const resetBtn = document.getElementById("resetBtn");
+    const qrToggleBtn = document.getElementById("qrToggleBtn");
+    const qrContainer = document.getElementById("qrContainer");
+    const qrCode = document.getElementById("qrCode");
 
     let selectedFiles = [];
     let selectedMaxDownloads = "unlimited";
+    let qrGenerated = false;
 
     function selectMaxDownloads(value) {
       selectedMaxDownloads = value;
@@ -276,11 +287,44 @@
       renderFileList();
     }
 
+    function generateQrCode(url) {
+      const qr = qrcode(0, "M");
+      qr.addData(url);
+      qr.make();
+      qrCode.innerHTML = qr.createSvgTag({
+        scalable: true,
+        margin: 0,
+        alt: `Code QR pointant vers ${url}`
+      });
+    }
+
+    qrToggleBtn.addEventListener("click", () => {
+      const isHidden = qrContainer.classList.contains("hidden");
+      if (isHidden) {
+        if (!qrGenerated) {
+          generateQrCode(linkInput.value);
+          qrGenerated = true;
+        }
+        qrContainer.classList.remove("hidden");
+        qrToggleBtn.textContent = "Masquer le QR Code";
+        qrToggleBtn.setAttribute("aria-expanded", "true");
+      } else {
+        qrContainer.classList.add("hidden");
+        qrToggleBtn.textContent = "Afficher le QR Code";
+        qrToggleBtn.setAttribute("aria-expanded", "false");
+      }
+    });
+
     function resetToIdle() {
       selectedFiles = [];
       fileInput.value = "";
       passwordInput.value = "";
       selectMaxDownloads("unlimited");
+      qrGenerated = false;
+      qrCode.innerHTML = "";
+      qrContainer.classList.add("hidden");
+      qrToggleBtn.textContent = "Afficher le QR Code";
+      qrToggleBtn.setAttribute("aria-expanded", "false");
       renderFileList();
       uploadBtn.textContent = "Create link";
       progressWrap.classList.add("hidden");
