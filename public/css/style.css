@@ -365,6 +365,28 @@ img, svg { display: block; max-width: 100%; }
   text-align: center;
 }
 
+/* ---------- Text input ---------- */
+.text-input {
+  width: 100%;
+  padding: 12px var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: rgba(0, 0, 0, 0.25);
+  color: var(--color-text);
+  font-size: 14px;
+  font-family: var(--font-body);
+  transition: border-color var(--transition-fast);
+}
+.text-input::placeholder { color: var(--color-text-faint); }
+.text-input:focus { border-color: var(--color-cyan); }
+.text-input--invalid { border-color: var(--color-error); }
+
+.field-error {
+  margin-top: var(--space-2);
+  font-size: 13px;
+  color: var(--color-error);
+}
+
 /* ---------- Link box (upload success) ---------- */
 .link-box {
   display: flex;

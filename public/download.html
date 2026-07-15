@@ -70,6 +70,36 @@
           <button id="downloadBtn" class="btn btn--primary">Download</button>
         </div>
 
+        <!-- Password-protected state -->
+        <div id="statePassword" class="hidden">
+          <h1 class="card__title">Password required</h1>
+          <p class="card__subtitle">This file is protected. Enter the password to download it.</p>
+
+          <div class="info-list">
+            <div class="info-list__row">
+              <span class="info-list__label">File</span>
+              <span class="info-list__value info-list__value--file">
+                <span id="filePwIcon" aria-hidden="true"></span>
+                <span id="filePwName"></span>
+              </span>
+            </div>
+            <div class="info-list__row">
+              <span class="info-list__label">Size</span>
+              <span class="info-list__value" id="filePwSize"></span>
+            </div>
+            <div class="info-list__row">
+              <span class="info-list__label">Expires</span>
+              <span class="info-list__value" id="filePwExpires" title=""></span>
+            </div>
+          </div>
+
+          <form id="passwordForm">
+            <input type="password" class="text-input" id="passwordInput" placeholder="Password" autocomplete="off">
+            <p class="field-error hidden" id="passwordError" aria-live="polite"></p>
+            <button type="submit" class="btn btn--primary mt-4" id="passwordSubmitBtn">Download</button>
+          </form>
+        </div>
+
         <!-- Error state -->
         <div id="stateError" class="hidden">
           <div class="alert alert--error">
@@ -120,10 +150,16 @@
 
     const stateLoading = document.getElementById("stateLoading");
     const stateReady = document.getElementById("stateReady");
+    const statePassword = document.getElementById("statePassword");
     const stateError = document.getElementById("stateError");
 
+    const passwordForm = document.getElementById("passwordForm");
+    const passwordInput = document.getElementById("passwordInput");
+    const passwordError = document.getElementById("passwordError");
+    const passwordSubmitBtn = document.getElementById("passwordSubmitBtn");
+
     function showState(el) {
-      [stateLoading, stateReady, stateError].forEach((s) => s.classList.add("hidden"));
+      [stateLoading, stateReady, statePassword, stateError].forEach((s) => s.classList.add("hidden"));
       el.classList.remove("hidden");
     }
 
@@ -143,6 +179,18 @@
       showState(stateError);
     }
 
+    function hidePasswordError() {
+      passwordError.textContent = "";
+      passwordError.classList.add("hidden");
+      passwordInput.classList.remove("text-input--invalid");
+    }
+
+    function showPasswordError(message) {
+      passwordError.textContent = message;
+      passwordError.classList.remove("hidden");
+      passwordInput.classList.add("text-input--invalid");
+    }
+
     function renderReady(data) {
       document.getElementById("fileIcon").textContent = getFileIcon(data.filename);
       document.getElementById("filename").textContent = data.filename;
@@ -151,6 +199,17 @@
       expiresEl.textContent = formatExpiry(data.expiresAt);
       expiresEl.title = new Date(data.expiresAt).toLocaleString();
       showState(stateReady);
+    }
+
+    function renderPassword(data) {
+      document.getElementById("filePwIcon").textContent = getFileIcon(data.filename);
+      document.getElementById("filePwName").textContent = data.filename;
+      document.getElementById("filePwSize").textContent = formatBytes(data.size);
+      const expiresEl = document.getElementById("filePwExpires");
+      expiresEl.textContent = formatExpiry(data.expiresAt);
+      expiresEl.title = new Date(data.expiresAt).toLocaleString();
+      showState(statePassword);
+      passwordInput.focus();
     }
 
     const id = window.location.pathname.split("/").filter(Boolean).pop();
@@ -173,11 +232,51 @@
       } catch (err) {
         return showError("generic");
       }
-      renderReady(data);
+      if (data.passwordProtected) {
+        renderPassword(data);
+      } else {
+        renderReady(data);
+      }
     }
 
     document.getElementById("downloadBtn")?.addEventListener("click", () => {
       window.location.href = `/api/files/${id}`;
+    });
+
+    passwordForm?.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      hidePasswordError();
+      passwordSubmitBtn.disabled = true;
+      passwordSubmitBtn.textContent = "Verifying…";
+
+      let res;
+      try {
+        res = await fetch(`/api/files/${id}/verify`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ password: passwordInput.value })
+        });
+      } catch (err) {
+        passwordSubmitBtn.disabled = false;
+        passwordSubmitBtn.textContent = "Download";
+        return showPasswordError("Network error. Please check your connection and try again.");
+      }
+
+      let data = null;
+      try { data = await res.json(); } catch (err) { /* ignore */ }
+
+      if (res.status === 404) return showError("not-found");
+      if (res.status === 410) return showError("expired");
+
+      if (!res.ok || !data || !data.success) {
+        passwordSubmitBtn.disabled = false;
+        passwordSubmitBtn.textContent = "Download";
+        return showPasswordError((data && data.error) || "Something went wrong. Please try again.");
+      }
+
+      window.location.href = `/api/files/${id}?token=${encodeURIComponent(data.token)}`;
+      passwordSubmitBtn.disabled = false;
+      passwordSubmitBtn.textContent = "Download";
     });
 
     loadFileInfo();
