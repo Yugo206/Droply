@@ -13,6 +13,15 @@ const BCRYPT_COST_FACTOR = 12;
 const DOWNLOAD_TOKEN_SECRET = crypto.randomBytes(32);
 const DOWNLOAD_TOKEN_TTL_MS = 5 * 60 * 1000; // 5 minutes
 const GENERIC_INVALID_PASSWORD_MESSAGE = "Mot de passe invalide.";
+const GENERIC_LINK_UNAVAILABLE_MESSAGE = "Ce lien n'est plus disponible.";
+const ALLOWED_MAX_DOWNLOADS = [1, 5, 20];
+
+// Returns one of ALLOWED_MAX_DOWNLOADS, or null for unlimited (also the
+// fallback for missing/unrecognized input).
+function parseMaxDownloads(value) {
+    const parsed = Number(value);
+    return ALLOWED_MAX_DOWNLOADS.includes(parsed) ? parsed : null;
+}
 
 // Used as a stand-in bcrypt.compare() target when there is nothing real to
 // compare against, so the response time doesn't leak whether a file exists
@@ -154,15 +163,23 @@ CREATE TABLE IF NOT EXISTS files (
     created_at INTEGER,
     expires_at INTEGER,
     isZip INTEGER,
-    password_hash TEXT
+    password_hash TEXT,
+    max_downloads INTEGER DEFAULT NULL,
+    download_count INTEGER NOT NULL DEFAULT 0
 )
 `).run();
 
-// Migration for pre-existing databases created before password protection
-// was added: add the nullable column if it isn't there yet.
-const existingColumns = db.prepare("PRAGMA table_info(files)").all();
-if (!existingColumns.some((col) => col.name === "password_hash")) {
+// Migrations for pre-existing databases created before these columns
+// existed: add whichever ones are missing.
+const existingColumns = db.prepare("PRAGMA table_info(files)").all().map((col) => col.name);
+if (!existingColumns.includes("password_hash")) {
     db.prepare("ALTER TABLE files ADD COLUMN password_hash TEXT").run();
+}
+if (!existingColumns.includes("max_downloads")) {
+    db.prepare("ALTER TABLE files ADD COLUMN max_downloads INTEGER DEFAULT NULL").run();
+}
+if (!existingColumns.includes("download_count")) {
+    db.prepare("ALTER TABLE files ADD COLUMN download_count INTEGER NOT NULL DEFAULT 0").run();
 }
 
 const app = express();
@@ -210,6 +227,8 @@ app.get("/api/file-info/:id", (req, res) => {
         size: file.size,
         expiresAt: file.expires_at,
         passwordProtected: Boolean(file.password_hash),
+        downloadCount: file.download_count,
+        maxDownloads: file.max_downloads,
         link: `/api/files/${file.id}`
     });
 });
@@ -225,6 +244,10 @@ app.get("/api/files/:id", (req, res) => {
         return res.status(410).json({ error: "File has expired." });
     }
 
+    if (file.max_downloads !== null && file.download_count >= file.max_downloads) {
+        return res.status(410).json({ error: GENERIC_LINK_UNAVAILABLE_MESSAGE });
+    }
+
     if (file.password_hash) {
         const token = req.query.token;
         if (!verifyDownloadToken(token, file.id)) {
@@ -232,7 +255,25 @@ app.get("/api/files/:id", (req, res) => {
         }
     }
 
-    res.download(path.join(UPLOADS_DIR, file.stored_name), file.filename, (err) => {
+    const filePath = path.join(UPLOADS_DIR, file.stored_name);
+    if (!fs.existsSync(filePath)) {
+        return res.status(500).json({ error: "Error sending file." });
+    }
+
+    // Increment atomically and re-check the limit in the same statement, so
+    // a file never ends up downloaded more than max_downloads times even
+    // under concurrent requests racing the check above.
+    const { changes } = db.prepare(`
+        UPDATE files
+        SET download_count = download_count + 1
+        WHERE id = ? AND (max_downloads IS NULL OR download_count < max_downloads)
+    `).run(file.id);
+
+    if (changes === 0) {
+        return res.status(410).json({ error: GENERIC_LINK_UNAVAILABLE_MESSAGE });
+    }
+
+    res.download(filePath, file.filename, (err) => {
     if (err) {
         return res.status(500).json({ error: "Error sending file." });
     }
@@ -300,6 +341,7 @@ app.post("/api/upload", uploadLimiter, upload.array("files"), async (req, res) =
 
     const password = typeof req.body.password === "string" ? req.body.password : "";
     const passwordHash = password ? await bcrypt.hash(password, BCRYPT_COST_FACTOR) : null;
+    const maxDownloads = parseMaxDownloads(req.body.maxDownloads);
 
     if (req.files.length === 1) {
     filename = req.files[0].originalname;
@@ -322,8 +364,8 @@ app.post("/api/upload", uploadLimiter, upload.array("files"), async (req, res) =
     }
 
     db.prepare(`
-        INSERT INTO files (id, filename, stored_name, size, created_at, expires_at, isZip, password_hash)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO files (id, filename, stored_name, size, created_at, expires_at, isZip, password_hash, max_downloads, download_count)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
     `).run(
         id,
         filename,
@@ -332,7 +374,8 @@ app.post("/api/upload", uploadLimiter, upload.array("files"), async (req, res) =
         createdAt,
         expiresAt,
         isZip,
-        passwordHash
+        passwordHash,
+        maxDownloads
     );
 
     const url = `${req.protocol}://${req.get("host")}/f/${id}`;

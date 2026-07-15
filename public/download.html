@@ -65,6 +65,10 @@
               <span class="info-list__label">Expires</span>
               <span class="info-list__value" id="expires" title=""></span>
             </div>
+            <div class="info-list__row">
+              <span class="info-list__label">Téléchargements</span>
+              <span class="info-list__value" id="downloads"></span>
+            </div>
           </div>
 
           <button id="downloadBtn" class="btn btn--primary">Download</button>
@@ -90,6 +94,10 @@
             <div class="info-list__row">
               <span class="info-list__label">Expires</span>
               <span class="info-list__value" id="filePwExpires" title=""></span>
+            </div>
+            <div class="info-list__row">
+              <span class="info-list__label">Téléchargements</span>
+              <span class="info-list__value" id="filePwDownloads"></span>
             </div>
           </div>
 
@@ -136,6 +144,11 @@
       return `In ${minutes}m`;
     }
 
+    function formatDownloads(downloadCount, maxDownloads) {
+      if (maxDownloads === null || maxDownloads === undefined) return "∞";
+      return `${downloadCount} / ${maxDownloads}`;
+    }
+
     function getFileIcon(filename) {
       const ext = (filename.split(".").pop() || "").toLowerCase();
       if (["png", "jpg", "jpeg", "gif", "svg", "webp"].includes(ext)) return "\u{1F5BC}️";
@@ -172,6 +185,9 @@
       } else if (kind === "expired") {
         title.textContent = "This link has expired";
         text.textContent = "For privacy, files are automatically deleted 24 hours after upload.";
+      } else if (kind === "unavailable") {
+        title.textContent = "Link unavailable";
+        text.textContent = "Ce lien n'est plus disponible.";
       } else {
         title.textContent = "Something went wrong";
         text.textContent = "We couldn't load this file's details. Please try again.";
@@ -198,6 +214,7 @@
       const expiresEl = document.getElementById("expires");
       expiresEl.textContent = formatExpiry(data.expiresAt);
       expiresEl.title = new Date(data.expiresAt).toLocaleString();
+      document.getElementById("downloads").textContent = formatDownloads(data.downloadCount, data.maxDownloads);
       showState(stateReady);
     }
 
@@ -208,6 +225,7 @@
       const expiresEl = document.getElementById("filePwExpires");
       expiresEl.textContent = formatExpiry(data.expiresAt);
       expiresEl.title = new Date(data.expiresAt).toLocaleString();
+      document.getElementById("filePwDownloads").textContent = formatDownloads(data.downloadCount, data.maxDownloads);
       showState(statePassword);
       passwordInput.focus();
     }
@@ -231,6 +249,9 @@
         data = await res.json();
       } catch (err) {
         return showError("generic");
+      }
+      if (typeof data.maxDownloads === "number" && data.downloadCount >= data.maxDownloads) {
+        return showError("unavailable");
       }
       if (data.passwordProtected) {
         renderPassword(data);

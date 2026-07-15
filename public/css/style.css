@@ -387,6 +387,40 @@ img, svg { display: block; max-width: 100%; }
   color: var(--color-error);
 }
 
+/* ---------- Field group / segmented control ---------- */
+.field-group__label {
+  display: block;
+  font-size: 13px;
+  color: var(--color-text-muted);
+  margin-bottom: var(--space-2);
+}
+.segmented {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.segmented__option {
+  flex: 1 1 auto;
+  padding: 10px var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color var(--transition-fast), background var(--transition-fast), color var(--transition-fast);
+}
+.segmented__option:hover {
+  border-color: var(--color-border-strong);
+  color: var(--color-text);
+}
+.segmented__option.is-selected {
+  background: var(--gradient-cta);
+  border-color: transparent;
+  color: #ffffff;
+}
+
 /* ---------- Link box (upload success) ---------- */
 .link-box {
   display: flex;
