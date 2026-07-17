@@ -4,7 +4,8 @@
   "description": "A fast, simple and privacy-friendly way to transfer files between devices.",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "node --test test/*.test.js",
+    "test:e2e": "playwright test",
     "start": "node app.js",
     "dev": "nodemon app.js"
   },
@@ -31,6 +32,9 @@
     "qrcode-generator": "^2.0.4"
   },
   "devDependencies": {
-    "nodemon": "^3.1.14"
+    "@playwright/test": "^1.61.1",
+    "jsqr": "^1.4.0",
+    "nodemon": "^3.1.14",
+    "pngjs": "^7.0.0"
   }
 }

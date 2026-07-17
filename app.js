@@ -59,8 +59,9 @@ function verifyDownloadToken(token, fileId) {
     return payload.id === fileId && Date.now() <= payload.exp;
 }
 
-const db = new Database(path.join(__dirname, "database.db"));
-const UPLOADS_DIR = path.join(__dirname, "uploads");
+const PORT = process.env.PORT || 3000;
+const db = new Database(path.join(__dirname, process.env.DB_PATH || "database.db"));
+const UPLOADS_DIR = path.join(__dirname, process.env.UPLOADS_DIR || "uploads");
 
 if (!fs.existsSync(UPLOADS_DIR)) {
     fs.mkdirSync(UPLOADS_DIR);
@@ -415,8 +416,10 @@ function clearExpiredFiles() {
 }
 
 clearExpiredFiles();
-setInterval(clearExpiredFiles, 60 * 60 * 1000);
+setInterval(clearExpiredFiles, 60 * 60 * 1000).unref();
 
-app.listen(3000, () => {
-    console.log("Server running on http://localhost:3000");
+const server = app.listen(PORT, () => {
+    console.log(`Server running on http://localhost:${PORT}`);
 });
+
+module.exports = { app, server };

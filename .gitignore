@@ -4,3 +4,7 @@
 *.iml
 node_modules/
 *.db
+test-uploads/
+test-e2e-uploads/
+test-results/
+playwright-report/
